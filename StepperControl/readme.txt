@@ -1,7 +1,7 @@
-readme for the Arduino StepperControl library by Dmitri Ranfft.
+Documentation for the Arduino StepperControl library by Dmitri Ranfft.
 
-Last update (dd.mm.yyyy): 09.04.2015
-For version: 1.0
+Last update (dd.mm.yyyy): 14.04.2015
+For version: 1.1
 --------------------------------------------------------------------------------------------------------------------------------
 Description of the library
 
@@ -17,6 +17,22 @@ The ISR reads entries from the buffer and performs the given tasks/motor movemen
 Because there is a buffer, the calculation can be suspended for a while without causing
 interference with the motor movement.
 --------------------------------------------------------------------------------------------------------------------------------
+Changelog:
+v1.1
+- Added state change/step counter for each individual motor (individualStepsCounter[<motor>]/2 = completed steps of <motor>).
+  Use resetIndividualStepsCounter() to reset it.
+- Added toggleTimer(<0|1>) function. Now it is possible to pause the movement, rather than just abort it.
+- Clean-up:
+    - These variables are now protected: movementCompleted, *nextStep, *nextStateChange, stepsCounterCalc, motorsCount,
+      *lowTime, *highTime, *stepStatus, *stepPin, *dirPin, *invertDir, idleCounter, stepsCounter, totalSteps, 
+      executionIndex, calculationIndex, taskList[][], *currentState
+    - These functions are now protected: clearTaskList(), setDir(), interruptExec(), performTask(), move_t(), (*repeatInLoop)()
+    - Removed unused variables: waitForTask
+    - Removed most of the unused commented-out code
+
+v1.0
+Initial release.
+--------------------------------------------------------------------------------------------------------------------------------
 Usage
 
 See example.
@@ -24,10 +40,10 @@ See example.
 Solutions to possible problems
 
 1.
-Problem: The motors stop moving when the user function is called.
+Problem: The motor movement is interrupted when the user function is called.
 
 Solution: This can happen if the user function takes a long time to execute.
-Try increasing the buffer size (value bufferSize in the header file).
+Try increasing the buffer size (the variable bufferSize in the header file).
 Keep in mind that only specific values will work, and that increasing the buffer
 size will significantly increase RAM usage.
 

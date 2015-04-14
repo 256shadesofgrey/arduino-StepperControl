@@ -9,9 +9,6 @@ with 2, so I don't actually know if it will.
 
 This library uses timer1, so it is likely to interfere with other things that
 use it.
-
-Version: 1.0
-Last update (dd.mm.yyy): 09.04.2015
 */
 
 /*
@@ -26,6 +23,23 @@ Last update (dd.mm.yyy): 09.04.2015
 	GNU General Public License for more details.
 	You should have received a copy of the GNU General Public License
 	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+/*
+Changelog:
+v1.1
+- Added state change/step counter for each individual motor (individualStepsCounter[<motor>]/2 = completed steps of <motor>). Use resetIndividualStepsCounter() to reset it.
+- Added toggleTimer(<0|1>) function. Now it is possible to pause the movement, rather than just abort it.
+- Clean-up:
+	- These variables are now protected: movementCompleted, *nextStep, *nextStateChange, stepsCounterCalc, motorsCount,
+	    *lowTime, *highTime, *stepStatus, *stepPin, *dirPin, *invertDir, idleCounter, stepsCounter, totalSteps, 
+		executionIndex, calculationIndex, taskList[][], *currentState
+	- These functions are now protected: clearTaskList(), setDir(), interruptExec(), performTask(), move_t(), (*repeatInLoop)()
+	- Removed unused variables: waitForTask
+	- Removed most of the unused commented-out code
+
+v1.0
+Initial release.
 */
 
 #ifndef _StepperControl
@@ -50,47 +64,26 @@ class StepperControl{
 		//Final movement speed will be determined by *speedE or *signalLengthE, whichever indicates a slower movement. All values in *speedE can be set to 0 for max. speed.
 		StepperControl(int motorsCountE, int *enablePinE, int *invertEnableE, int *stepPinE, int *dirPinE, int *invertDirE, double *speedE, long *signalLengthE, long clockFrequencyE = 16000000);
 		
-		//void doStep(int dir = 0, int motor = 0, int repeat = 1);
-		//void move(long steps, int motor = 0);
+		//---User functions---
 		int moveAll(long *steps);
 		void enableMotor(int enable = 0, int motor = 0);
 		void enableAll(int enable = 0);
 		void setSpeed(double *speedE);
 		void timerSetup();
-		void setDir(int motor = 0, int dir = 0);
-		
-		static void (*isrA)();
-		static int (*repeatInLoop)();
-		static int idleFunc();
-		static void move_t(int motor);
+		void resetIndividualStepsCounter();
+		void toggleTimer(int on = 1);
 		static void addToLoop(int (*inLoopFunc)());
 		
-		static void interruptExec();
-		static void performTask(uint8_t taskIndex);
-		static void clearTaskList();
+		//---Functions intended for internal use, but could be useful for external applications.---
+		static int idleFunc();
 		
-		static int motorsCount;
-		static long *lowTime;
-		static long *highTime;
-		static int *stepStatus;
-		static int *stepPin;
-		static int *dirPin;
-		static int *invertDir;
+		//---Information variables for the user.---
+		static unsigned long *individualStepsCounter;
 		static unsigned long interruptCounter;
-		static unsigned long idleCounter;
-		static unsigned long stepsCounter;
-		static unsigned long stepsCounterCalc;
-		static unsigned long totalSteps;
-		//static unsigned long stepsCounter2;
-		static unsigned long *nextStateChange;
-		static unsigned long *nextStep;
-		//static long *steppingPoint;
-		static uint8_t executionIndex; //The actual index will be calculated with %bufferSize.
-		static uint8_t calculationIndex; //The actual index will be calculated with %bufferSize.
-		static uint8_t waitForTask;
-		static uint16_t taskList[3][bufferSize]; //Contains the time difference between tasks, number of overflows before execution, and an indicator of which task to execute.
-		static uint8_t *currentState;
-		static uint8_t movementCompleted;
+		
+		//---Functions for internal use that have to be public for technical reasons.---
+		static void (*isrA)();
+		
 		
 	protected:
 		int *enablePin;
@@ -98,21 +91,41 @@ class StepperControl{
 		double *speed;
 		long *movementTime;
 		long clockFrequency;
-		//unsigned long *pulseDelay;
 		long *signalLength; //time required to complete 1 step.
+		static unsigned long stepsCounterCalc;
+		static unsigned long *nextStateChange;
+		static unsigned long *nextStep;
+		static uint8_t movementCompleted;
+		static int motorsCount;
+		static long *lowTime;
+		static long *highTime;
+		static int *stepStatus;
+		static int *stepPin;
+		static int *dirPin;
+		static int *invertDir;
+		static unsigned long idleCounter;
+		static unsigned long stepsCounter;
+		static unsigned long totalSteps;
+		static uint8_t executionIndex; //The actual index will be calculated with %bufferSize.
+		static uint8_t calculationIndex; //The actual index will be calculated with %bufferSize.
+		static uint16_t taskList[3][bufferSize]; //Contains the time difference between tasks, number of overflows before execution, and an indicator of which task to execute.
+		static uint8_t *currentState;
 		
-		void attachInterrupt(/*int AB, */void (*isr)());
+		static int (*repeatInLoop)();
+		static int bufferCheck(int mode = 0);
+		static void clearTaskList();
+		static void interruptExec();
+		static void performTask(uint8_t taskIndex);
+		static void move_t(int motor);
+		
+		void setDir(int motor = 0, int dir = 0);
+		void attachInterrupt(void (*isr)());
 		void disableInterrupt();
 		void enableInterrupt();
 		int arrayMax(long *array, int arraySize);
 		int arrayMin(unsigned long *array, int arraySize, int floor = minimumTimerInterval);
-		static int bufferCheck(int mode = 0);
-		//static int bufferCheck();
-		//static int bufferOverrunCheck();
-		//static int bufferUnderrunCheck();
 		void initArray(unsigned long *array, int arraySize);
 		void calculateNextStepTime(int motor, unsigned long *nextStep);
-		//void fillTaskList();
 		void fillTaskList(uint16_t mask);
 };
 

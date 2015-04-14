@@ -9,9 +9,6 @@ with 2, so I don't actually know if it will.
 
 This library uses timer1, so it is likely to interfere with other things that
 use it.
-
-Version: 1.0
-Last update (dd.mm.yyy): 09.04.2015
 */
 
 /*
@@ -46,13 +43,13 @@ unsigned long *StepperControl::nextStateChange;
 unsigned long *StepperControl::nextStep;
 unsigned long StepperControl::interruptCounter = 0;
 unsigned long StepperControl::stepsCounter = 0;
+unsigned long *StepperControl::individualStepsCounter;
 unsigned long StepperControl::stepsCounterCalc = 0;
 unsigned long StepperControl::totalSteps = 0;
 unsigned long StepperControl::idleCounter = 0;
 
 uint8_t StepperControl::executionIndex = 0;
 uint8_t StepperControl::calculationIndex = 1;
-uint8_t StepperControl::waitForTask;
 uint16_t StepperControl::taskList[3][bufferSize];
 uint8_t *StepperControl::currentState;
 uint8_t StepperControl::movementCompleted = 0;
@@ -80,6 +77,7 @@ StepperControl::StepperControl(int motorsCountE, int *enablePinE, int *invertEna
 	nextStateChange = (unsigned long*)calloc(motorsCount, sizeof(unsigned long));
 	currentState = (uint8_t*)calloc(motorsCount, sizeof(uint8_t));
 	nextStep = (unsigned long*)calloc(motorsCount, sizeof(unsigned long));
+	individualStepsCounter = (unsigned long*)calloc(motorsCount, sizeof(unsigned long));
 	
 	memcpy(enablePin, enablePinE, motorsCount*sizeof(int));
 	memcpy(invertEnable, invertEnableE, motorsCount*sizeof(int));
@@ -92,7 +90,6 @@ StepperControl::StepperControl(int motorsCountE, int *enablePinE, int *invertEna
 	timerSetup();
 	
 	for(int i = 0; i < motorsCount; i++){
-		//currentState[i] = 1;
 		stepStatus[i] = 0;
 		pinMode(enablePin[i], OUTPUT);
 		digitalWrite(enablePin[i], 1);
@@ -119,7 +116,8 @@ void StepperControl::timerSetup(){
 	//Turn on CTC mode
 	TCCR1B |= (1 << WGM12);
 	//Set CS10 and CS11 bits for 64 prescaler
-	TCCR1B |= (1 << CS11) | (1 << CS10);
+	//TCCR1B |= (1 << CS11) | (1 << CS10); //Using toggleTimer(1) instead.
+	toggleTimer(1);
 	//Enable timer compare interrupt
 	//TIMSK1 |= (1 << OCIE1A);
 
@@ -216,7 +214,6 @@ int StepperControl::arrayMin(unsigned long *array, int arraySize, int floor){
 	
 	//Finding the lowest value that is > 0.
 	for(int i = minIndex + 1; i < arraySize; i++){
-		//Serial.println(array[i]);
 		if(array[i] < array[minIndex] && array[i] > (unsigned long)floor){
 			minIndex = i;
 		}
@@ -234,6 +231,7 @@ void StepperControl::move_t(int motor){
 		return;
 	}
 	++stepsCounter; //If this function was called, a state change actually took place, so the steps counter is increased.
+	++individualStepsCounter[motor];
 	if(stepStatus[motor]){
 		digitalWrite(stepPin[motor], HIGH);
 		stepStatus[motor] = 0;
@@ -291,7 +289,6 @@ void StepperControl::interruptExec(){
 	}
 	
 	//Adjusting values for new executionIndex.
-	//exec = (uint8_t)(executionIndex%bufferSize);
 	uint8_t exec1 = (uint8_t)(executionIndex-1);
 	exec1 = exec1%bufferSize; //%bufferSize would be ignored it was added to the previous line. No idea, why.
 
@@ -339,7 +336,7 @@ void StepperControl::setDir(int motor, int dir){
 /*Determines the amount of time before next state change. This function is called when the time
 for the next step is below minimumTimerInterval.*/
 void StepperControl::calculateNextStepTime(int motor, unsigned long *nextStep){
-	//If the motor state is LOW, assigns highTime, and sets state to HIGH and vice versa.
+	//If the motor state is LOW, adds highTime, and sets state to HIGH and vice versa.
 	if(currentState[motor] == 0){
 		nextStep[motor] += (unsigned long)highTime[motor];
 		currentState[motor] = 1;
@@ -471,8 +468,8 @@ int StepperControl::moveAll(long *stepsE){
 		else durations[i] = 0;
 		
 		if(durations[i] > 0){
-			lowTime[i] = (long)((clockFrequency/(64*(1000000.0/durations[i])))/*-1*/);
-			highTime[i] = (long)((clockFrequency/(64*(1000000.0/signalLength[i])))/*-1*/);
+			lowTime[i] = (long)((clockFrequency/(64*(1000000.0/durations[i]))));
+			highTime[i] = (long)((clockFrequency/(64*(1000000.0/signalLength[i]))));
 		}else{
 			lowTime[i] = 0;
 			highTime[i] = 0;
@@ -499,6 +496,7 @@ int StepperControl::moveAll(long *stepsE){
 	calculationIndex = 1;
 	clearTaskList();
 	for(int i = 0; i < motorsCount; i++){
+		//individualStepsCounter[i] = 0; //Use resetIndividualStepsCounter() instead.
 		currentState[i] = 0;
 		stepStatus[i] = 0;
 		nextStep[i] = 0;
@@ -507,9 +505,27 @@ int StepperControl::moveAll(long *stepsE){
 	return exitStatus;
 }
 
+//Function for resetting the individualStepsCounter.
+void StepperControl::resetIndividualStepsCounter(){
+	for(int i = 0; i < motorsCount; i++){
+		individualStepsCounter[i] = 0;
+	}
+}
+
 //Dummy function that is executed if addToLoop() wasn't called by the user.
 int StepperControl::idleFunc(){
 	return 0;
+}
+
+/*Toggles timer1 between prescaler of 64 and stopping.
+0 stop timer, 1 start timer*/
+void StepperControl::toggleTimer(int on){
+	if(on){
+		TCCR1B &= ~(1 << CS12);
+		TCCR1B |= (1 << CS11) | (1 << CS10); //prescaler 64
+	}else{
+		TCCR1B &= ~((1 << CS12) | (1 << CS11) | (1 << CS10));
+	}
 }
 
 //Sets all values of a given array to 0.
