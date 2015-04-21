@@ -53,6 +53,7 @@ uint8_t StepperControl::calculationIndex = 1;
 uint16_t StepperControl::taskList[3][bufferSize];
 uint8_t *StepperControl::currentState;
 uint8_t StepperControl::movementCompleted = 0;
+uint8_t *StepperControl::enabledMotors;
 
 /*Initialize class with user values.*/
 StepperControl::StepperControl(int motorsCountE, int *enablePinE, int *invertEnableE, int *stepPinE, int *dirPinE, int *invertDirE, double *speedE, long *signalLengthE, long clockFrequencyE){
@@ -78,6 +79,7 @@ StepperControl::StepperControl(int motorsCountE, int *enablePinE, int *invertEna
 	currentState = (uint8_t*)calloc(motorsCount, sizeof(uint8_t));
 	nextStep = (unsigned long*)calloc(motorsCount, sizeof(unsigned long));
 	individualStepsCounter = (unsigned long*)calloc(motorsCount, sizeof(unsigned long));
+	enabledMotors = (uint8_t*)calloc(motorsCount, sizeof(uint8_t));
 	
 	memcpy(enablePin, enablePinE, motorsCount*sizeof(int));
 	memcpy(invertEnable, invertEnableE, motorsCount*sizeof(int));
@@ -165,6 +167,7 @@ void StepperControl::enableMotor(int enable, int motor){
 	if(digitalRead(enablePin[motor]) != (enable+invertEnable[motor]) & 0x1){
 		digitalWrite(enablePin[motor], (enable+invertEnable[motor]) & 0x1);
 	}
+	enabledMotors[motor] = (uint8_t)enable;
 }
 
 /*Enables (1) or disables (0) all motors.*/
@@ -265,6 +268,7 @@ void StepperControl::performTask(uint8_t taskIndex){
 			if(taskList[2][taskIndex] & (1 << i)) move_t(i);
 		}
 		taskList[2][taskIndex] = 0;
+		//taskList[1][taskIndex] = 0;
 	}
 }
 
@@ -299,8 +303,8 @@ void StepperControl::interruptExec(){
 	
 	//If the buffer underrun check failed, wait some time before trying again.
 	if(!bCheck){
-		OCR1A = idleTime;
 		++idleCounter; //Increase idle counter. This will be used in future versions to subtract the idle time from the next step, allowing more consistent movement.
+		OCR1A = idleTime;
 		return;
 	}
 	
@@ -359,7 +363,9 @@ void StepperControl::fillTaskList(uint16_t mask){
 	int nextTaskTimeIndex = 0; //Index of the lowest value in nextStep that isn't 0.
 	
 	//Adds entries to the buffer as long as there is any space available.
-	for( ; bufferCheck(); calculationIndex++){
+	//If calculationIndex == executionIndex, means that the execution has caught up with the calculation.
+	//If that is the case, bufferCheck() will return 0, but the calculation has to continue.
+	while(bufferCheck() || calculationIndex == executionIndex){
 		//Calculate the time until next step for each motor that is moved now.
 		for(int i = 0; i < motorsCount; i++){
 			if(nextStep[i] <= minimumTimerInterval && !(mask & (1 << i))) calculateNextStepTime(i, nextStep);
@@ -392,11 +398,15 @@ void StepperControl::fillTaskList(uint16_t mask){
 		//Debug output.
 		/*Serial.print(calculationIndex);
 		Serial.print(" ");
+		Serial.print(executionIndex);
+		Serial.print(" ");
 		Serial.print(taskList[0][calculationIndex%bufferSize]);
 		Serial.print(" ");
 		Serial.print(taskList[1][calculationIndex%bufferSize]);
 		Serial.print(" ");
 		Serial.println(taskList[2][calculationIndex%bufferSize]);*/
+		
+		calculationIndex++;
 	}
 }
 
@@ -482,6 +492,7 @@ int StepperControl::moveAll(long *stepsE){
 	fillTaskList(mask);//Preparing the buffer.
 	enableInterrupt();//Starting movement.
 	while(!movementCompleted){
+		//if(idleCounter) Serial.println(idleCounter); //debug
 		exitStatus = repeatInLoop(); //External function to be executed during the movement.
 		if(exitStatus == 1) break; //If the external function returns 1, the movemen stops.
 		fillTaskList(mask);

@@ -27,7 +27,13 @@ use it.
 
 /*
 Changelog:
-v1.1
+v1.2 (21.04.2015)
+- Added enabledMotors[] to check what motors are on.
+- Fixed a bug that caused the motor movement to stop if the execution caught up with the calculation.
+    This bug appeared when the buffer size was too small, or the user function took too much time to execute.
+- Set bufferSize to 64 (384 bytes).
+
+v1.1 (14.04.2015)
 - Added state change/step counter for each individual motor (individualStepsCounter[<motor>]/2 = completed steps of <motor>). Use resetIndividualStepsCounter() to reset it.
 - Added toggleTimer(<0|1>) function. Now it is possible to pause the movement, rather than just abort it.
 - Clean-up:
@@ -38,7 +44,7 @@ v1.1
 	- Removed unused variables: waitForTask
 	- Removed most of the unused commented-out code
 
-v1.0
+v1.0 (09.04.2015)
 Initial release.
 */
 
@@ -48,7 +54,7 @@ Initial release.
 
 //Has to be: 256%bufferSize = 0. Other values might work, but may occasionally cause the buffer to be used only partially.
 //The buffer uses 3 uint16_t per entry, so the memory usage is 6*bufferSize bytes (96 bytes for 16 entries).
-#define bufferSize 16
+#define bufferSize 64
 //250 is 1 ms with a prescaler of 64 and a clock speed of 16MHz.
 //Adjust this value if you want to wait a different amount of time when there are no entries in the buffer.
 #define idleTime 250
@@ -79,6 +85,7 @@ class StepperControl{
 		
 		//---Information variables for the user.---
 		static unsigned long *individualStepsCounter;
+		static uint8_t *enabledMotors;
 		static unsigned long interruptCounter;
 		
 		//---Functions for internal use that have to be public for technical reasons.---

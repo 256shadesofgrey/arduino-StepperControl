@@ -1,7 +1,7 @@
 Documentation for the Arduino StepperControl library by Dmitri Ranfft.
 
-Last update (dd.mm.yyyy): 14.04.2015
-For version: 1.1
+Last update (dd.mm.yyyy): 21.04.2015
+For version: 1.2
 --------------------------------------------------------------------------------------------------------------------------------
 Description of the library
 
@@ -18,6 +18,12 @@ Because there is a buffer, the calculation can be suspended for a while without 
 interference with the motor movement.
 --------------------------------------------------------------------------------------------------------------------------------
 Changelog:
+v1.2 (21.04.2015)
+- Added enabledMotors[] to check what motors are on.
+- Fixed a bug that caused the motor movement to stop if the execution caught up with the calculation.
+    This bug appeared when the buffer size was too small, or the user function took too much time to execute.
+- Set bufferSize to 64 (384 bytes).
+
 v1.1
 - Added state change/step counter for each individual motor (individualStepsCounter[<motor>]/2 = completed steps of <motor>).
   Use resetIndividualStepsCounter() to reset it.
@@ -50,9 +56,11 @@ size will significantly increase RAM usage.
 2.
 Problem: The step pins give irregular signals.
 
-Solution: If the variation is less than 0.1 ms, it works as intended. But if it is causing you problems,
+Solution: If the variation is less than 0.1 ms (25 ticks), it works as intended. But if it is causing you problems,
 try reducing the minimum timer interval (minimumTimerInterval in the header file). If the variation is
-bigger than that, try increasing it instead.
+bigger than that, try increasing it instead. Keep in mind that if minimumTimerInterval is too small,
+the timer might jump over the target value, causing it to wait for 2^16 steps. And a too big value will
+increase irregularities in the timing.
 --------------------------------------------------------------------------------------------------------------------------------
 Possible future features
 
